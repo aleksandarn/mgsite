@@ -1,0 +1,16 @@
+name = Opigno Collaborative Workspaces
+description = Integrates the collaborative workspaces feature to Opigno
+core = 7.x
+package = Opigno Apps
+
+dependencies[] = opigno_moxtra_app
+dependencies[] = opigno_calendar_app
+dependencies[] = entityreference_prepopulate
+dependencies[] = multiselect
+
+; Information added by Drupal.org packaging script on 2018-02-09
+version = "7.x-1.4"
+core = "7.x"
+project = "opigno_moxtra_app"
+datestamp = "1518184084"
+

@@ -1,0 +1,18 @@
+name = Opigno Pre-test App
+description = Define quizzes that must be passed before having access to a course
+core = 7.x
+package = Opigno Apps
+
+dependencies[] = og
+dependencies[] = og_quiz
+dependencies[] = entityreference
+dependencies[] = quiz
+dependencies[] = rules
+dependencies[] = rules_conditional
+dependencies[] = opigno_quiz_app
+; Information added by Drupal.org packaging script on 2014-03-04
+version = "7.x-1.0-rc4"
+core = "7.x"
+project = "opigno_pretest_app"
+datestamp = "1393921812"
+

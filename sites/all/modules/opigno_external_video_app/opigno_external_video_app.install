@@ -1,0 +1,52 @@
+<?php
+
+/**
+ * @file
+ * Contains install instructions and logic
+ */
+
+/**
+ * Implements hook_install()
+ */
+function opigno_external_video_app_install() {
+  $htmlformat = filter_format_load('html');
+  $html_profile=array();
+  if (module_exists('wysiwyg')) {
+    $html_profile = wysiwyg_get_profile('html');
+  }
+  // Enable filter and add button to wysiwyg editor if they exist
+  if (!empty($htmlformat) && !empty($html_profile)) {
+    //// Enable filter and set it after the wysiwyg ////////////////////////////////////////////
+    //// filter module strangeness workaround https://drupal.org/node/1304930 ////////////////
+    $htmlfilters = filter_list_format('html');
+    foreach ($htmlfilters as $title => $object) {
+      $htmlfilters[$title] = (array) $htmlfilters[$title];
+    }
+    $htmlformat->filters = $htmlfilters;
+    ////// Make sure filter_url is last and after the video filter
+    $htmlformat->filters['filter_url']['weight'] = 50;
+    $htmlformat->filters['video_filter']['weight'] = 49;
+    $htmlformat->filters['video_filter']['status'] = 1;
+    //////
+    filter_format_save($htmlformat);
+    ////
+
+    //////// Hacky (faking form submit) but better than serializing stuff and db operations ///////////////////
+    $html_profile = wysiwyg_get_profile('html');
+    $html_profile->settings['buttons']['video_filter']['video_filter'] = 1;
+    $html_profile->settings['format'] = $html_profile->format;
+    $html_profile->settings['editor'] = $html_profile->editor;
+    $form_state = array();
+    $form_state['values'] = $html_profile->settings;
+    $form_state['values']['preferences']=array();
+    $form_state['wysiwyg_profile']=$html_profile;
+    $editor = wysiwyg_get_editor($html_profile->editor);
+    $form_state['wysiwyg']['editor'] = $editor;
+    module_load_include('inc', 'wysiwyg', 'wysiwyg.admin');
+    wysiwyg_profile_form_submit(NULL, $form_state);
+    ////////
+    //
+  }
+}
+
+

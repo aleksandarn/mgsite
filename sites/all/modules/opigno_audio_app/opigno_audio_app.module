@@ -1,0 +1,421 @@
+<?php
+
+/**
+ * @file
+ * Module hooks.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function opigno_audio_app_menu() {
+  return array(
+    'node/%node/sort-audios' => array(
+      'title' => "Sort audio files",
+      'description' => "Sort audios inside the course",
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('opigno_audio_app_sort_course_audios_form', 1),
+      'access callback' => 'opigno_audio_app_access_node_sort_audios',
+      'access arguments' => array(1),
+      'file' => 'includes/opigno_audio_app.pages.inc',
+      'type' => MENU_CALLBACK,
+    ),
+  );
+}
+
+/**
+ * Implements hook_og_permission().
+ */
+function opigno_audio_app_og_permission() {
+  return array(
+    'access audio content' => array(
+      'title' => t("Allows the user the view the audios"),
+      'description' => t("Allows the creation of new audios"),
+    ),
+    'sort audios' => array(
+      'title' => t("Sort audios inside this course"),
+    ),
+  );
+}
+
+/**
+ * Access callback: check if user has access to sort audios inside the course.
+ *
+ * @param  stdClass $node
+ * @param  stdClass $account = NULL
+ *
+ * @return bool
+ */
+function opigno_audio_app_access_node_sort_audios($node, $account = NULL) {
+  if (!isset($account)) {
+    global $user;
+    $account = clone $user;
+  }
+  return og_user_access('node', $node->nid, 'sort audios', $account);
+}
+
+/**
+ * Implements hook_opigno_tool().
+ */
+function opigno_audio_app_opigno_tool($node = NULL) {
+  return array(
+    'audio' => array(
+      'name' => t("Audio Files"),
+      'path' => isset($node) ? "node/{$node->nid}/audio" : '',
+      'description' => t("The Audio files for this course"),
+      'actions' => array(
+        'add_audio' => array(
+          'title' => t("Add a new audio file"),
+          'href' => 'node/add/audio',
+          'access_arguments' => array(
+            'node',
+            isset($node) ? $node->nid : 0,
+            'create audio content',
+          ),
+          'access_callback' => 'og_user_access',
+          'query' => array(
+            'og_group_ref' => isset($node) ? $node->nid : '',
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function opigno_audio_app_views_api() {
+  return array(
+    'api' => '3.0',
+  );
+}
+
+/**
+ * Implements hook_theme().
+ */
+function opigno_audio_app_theme() {
+  return array(
+    'opigno_audio_app_sort_course_audios_form' => array(
+      'render element' => 'form',
+    ),
+    'opigno_audio' => array(
+      'variables' => array('file' => NULL),
+      'template' => 'templates/opigno--audio',
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu_local_tasks_alter().
+ */
+function opigno_audio_app_menu_local_tasks_alter(&$data, $router_item, $root_path) {
+  if ($root_path == 'node/%/audio') {
+    $gid = arg(1);
+    if (og_user_access('node',$gid,'create audio content')) {
+      $item = menu_get_item('node/add/audio');
+      $item['title'] = t("Add audio file");
+      $item['options']['query']['og_group_ref'] = $item['localized_options']['query']['og_group_ref'] = $gid;
+      $item['options']['attributes']['class'][] = $item['localized_options']['attributes']['class'][] = 'opigno-audio-audio';
+      $data['actions']['output'][] = array(
+        '#theme' => 'menu_local_action',
+        '#link' => $item,
+      );
+    }
+    $node=node_load($gid);
+    if (opigno_audio_app_access_node_sort_audios($node,NULL)) {
+      $item = menu_get_item("node/$gid/sort-audios");
+      $destination = request_path();
+      $item['options']['query']['destination'] = $item['localized_options']['query']['destination'] = $destination;
+      $item['options']['attributes']['class'][] = $item['localized_options']['attributes']['class'][] = 'opigno-audio-app-sort-audios';
+      $data['actions']['output'][] = array(
+        '#theme' => 'menu_local_action',
+        '#link' => $item,
+      );
+    }
+  }
+}
+
+/**
+ * Implements hook_node_insert().
+ */
+function opigno_audio_app_node_insert($node) {
+  if ($node->type == 'audio' && !empty($node->nid) && !empty($node->og_group_ref)) {
+    foreach ($node->og_group_ref as $lang => $items) {
+      foreach ($items as $item) {
+        // Set a default weight of 0.
+        opigno_audio_app_set_course_audio_weight($item['target_id'], $node->nid);
+      }
+    }
+  }
+}
+
+function opigno_audio_app_views_data() {
+  $data['opigno_audio_app_audio_sort']['table']['group'] = t("Opigno audio App");
+  $data['opigno_audio_app_audio_sort']['table']['join'] = array(
+    'node' => array(
+      'left_field' => 'nid',
+      'field' => 'audio_nid',
+    ),
+  );
+  $data['opigno_audio_app_audio_sort']['gid'] = array(
+    'title' => t("The audio group"),
+    'relationship' => array(
+      'base' => 'node',
+      'base field' => 'nid',
+      'handler' => 'views_handler_relationship',
+      'label' => t("Group"),
+    ),
+  );
+  $data['opigno_audio_app_audio_sort']['audio_nid'] = array(
+    'title' => t("The audio weight (as in order) inside a group"),
+    'relationship' => array(
+      'base' => 'node',
+      'base field' => 'nid',
+      'label' => t("audio"),
+    ),
+  );
+  $data['opigno_audio_app_audio_sort']['weight'] = array(
+    'title' => t("audio (as in order)"),
+    'help' => t("The audio of the audio inside a specific group"),
+    'field' => array(
+      'handler' => 'opigno_audio_app_field_course_audio_weight',
+      'click sortable' => TRUE,
+    ),
+    'filter' => array(
+      'handler' => 'opigno_audio_app_field_course_audio_weight',
+    ),
+    'sort' => array(
+      'handler' => 'opigno_audio_app_sort_course_audio_weight',
+    ),
+    'argument' => array(
+      'handler' => 'views_handler_argument_numeric',
+    ),
+  );
+  return $data;
+}
+
+/**
+ * Helper function to fetch the weight of a audio inside a course.
+ *
+ * @param  int $gid
+ * @param  int $nid
+ *
+ * @return int
+ */
+function opigno_audio_app_get_course_audio_weight($gid, $nid) {
+  $weight = db_select('opigno_audio_app_audio_sort', 'w')
+    ->fields('w', array('weight'))
+    ->condition('w.gid', $gid)
+    ->condition('w.audio_nid', $nid)
+    ->execute()
+    ->fetchField();
+  return empty($weight) ? 0 : $weight;
+}
+
+/**
+ * Helper function to insert the weight of a audio inside a course.
+ *
+ * @param  int $gid
+ * @param  int $nid
+ * @param  int $weight
+ */
+function opigno_audio_app_set_course_audio_weight($gid, $nid, $weight = 0) {
+  db_merge('opigno_audio_app_audio_sort')
+    ->key(array(
+      'gid' => $gid,
+      'audio_nid' => $nid,
+    ))
+    ->fields(array(
+      'gid' => $gid,
+      'audio_nid' => $nid,
+      'weight' => $weight,
+    ))
+    ->execute();
+}
+
+/**
+ * Helper function to fetch all course audios.
+ *
+ * @param  stdClass $node
+ *
+ * @return array
+ */
+function opigno_audio_app_get_course_audios($node) {
+  $audios = &drupal_static(__FUNCTION__);
+  if (!isset($audios[$node->nid])) {
+    $audios[$node->nid] = array();
+
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'node')
+      ->entityCondition('bundle', 'audio')
+      ->fieldCondition('og_group_ref', 'target_id', $node->nid, '=')
+      ->addMetaData('account', user_load(1));
+    $result = $query->execute();
+    $temp = array();
+    if (!empty($result['node'])) {
+      foreach (array_keys($result['node']) as $audio_nid) {
+        $temp[$audio_nid] = opigno_audio_app_get_course_audio_weight($node->nid, $audio_nid);
+      }
+    }
+    // Sort by weight.
+    asort($temp);
+    $audios[$node->nid] = array_keys($temp);
+  }
+
+  return $audios[$node->nid];
+}
+
+/**
+ * Theme callback: render the order form.
+ */
+function theme_opigno_audio_app_sort_course_audios_form($vars) {
+  $form = $vars['form'];
+  drupal_add_tabledrag('opigno-audio-app-sort-course-audios', 'order', 'sibling', 'opigno-audio-app-sort-course-audios-weight');
+
+  $header = array(
+    t("audios"),
+    t("Weight"),
+  );
+
+  $rows = array();
+  foreach ($form['table'] as $key => $item) {
+    if (preg_match('/quiz_[0-9]+/', $key)) {
+      $data = array();
+      $data[] = drupal_render($item['title']) . drupal_render($item['nid']);
+      $data[] = drupal_render($item['weight']);
+
+      $rows[] = array(
+        'data' => $data,
+        'class' => array('draggable'),
+      );
+    }
+  }
+
+  $form['table'] = array(
+    '#markup' => theme('table', array('header' => $header, 'rows' => $rows, 'attributes' => array('id' => 'opigno-audio-app-sort-course-audios'))),
+    '#weight' => 1,
+  );
+
+  return drupal_render_children($form);
+}
+
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function opigno_audio_app_field_formatter_info() {
+  $new_formatter = array(
+    'label' => t('AudioJs display'),
+    'field types' => array(0 => 'opigno_audio'),
+    'settings' => array(),
+    'module' => 'opigno_audio_app',
+  );
+  $info['opigno_audio_formatter'] = $new_formatter;
+  return $info;
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function opigno_audio_app_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  global $user;
+  $element = array();
+  $url = drupal_get_path("module","opigno_audio_app");
+  drupal_add_js($url."/js/audiojs/audiojs/audio.min.js",array('cache'=>false,'every_page'=>true));
+  drupal_add_js($url."/js/opigno_audio_app.js");
+  foreach ($items as $delta => $item) {
+    $element[$delta] = array(
+      '#theme' => 'opigno_audio',
+      '#file' => $item,
+    );
+  }
+  return $element;
+}
+
+/**
+ * Implements hook_field_info().
+ */
+function opigno_audio_app_field_info() {
+  return array(
+    'opigno_audio' => array(
+      'label' => t('Opigno audio'),
+      'description' => t("This field stores audio files"),
+      'settings' => array(
+        'display_field' => 0,
+        'display_default' => 0,
+        'uri_scheme' => variable_get('file_default_scheme', 'public'),
+      ),
+      'instance_settings' => array(
+        'file_extensions' => 'mp3',
+        'file_directory' => '',
+        'max_filesize' => '',
+        'description_field' => 0,
+      ),
+      'default_widget' => 'file_generic',
+      'default_formatter' => 'opigno_audio_formatter',
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_widget_info_alter().
+ */
+function opigno_audio_app_field_widget_info_alter(&$info) {
+  $info['file_generic']['field types'] = array_merge($info['file_generic']['field types'], array('opigno_audio'));
+}
+
+/**
+ * Implements hook_field_load().
+ */
+function opigno_audio_app_field_load($entity_type, $entities, $field, $instances, $langcode, &$items, $age) {
+  return file_field_load($entity_type, $entities, $field, $instances, $langcode, $items, $age);
+}
+
+function opigno_audio_app_field_is_empty($item, $field)
+{
+  return file_field_is_empty($item, $field);
+}
+
+
+function opigno_audio_app_field_presave($entity_type, $entity, $field, $instance, $langcode, &$items) {
+  return file_field_presave($entity_type, $entity, $field, $instance, $langcode, $items);
+}
+
+
+function opigno_audio_app_field_insert($entity_type, $entity, $field, $instance, $langcode, &$items) {
+  return file_field_insert($entity_type, $entity, $field, $instance, $langcode, $items);
+}
+
+
+function opigno_audio_app_field_update($entity_type, $entity, $field, $instance, $langcode, &$items) {
+  return file_field_update($entity_type, $entity, $field, $instance, $langcode, $items);
+}
+
+
+function opigno_audio_app_field_delete($entity_type, $entity, $field, $instance, $langcode, &$items) {
+  return file_field_delete($entity_type, $entity, $field, $instance, $langcode, $items);
+}
+
+function opigno_audio_app_field_delete_revision($entity_type, $entity, $field, $instance, $langcode, &$items) {
+  return file_field_delete_revision($entity_type, $entity, $field, $instance, $langcode, $items);
+}
+
+function opigno_audio_app_field_settings_form($field, $instance, $has_data) {
+  $form=file_field_settings_form($field, $instance, $has_data);
+  return $form;
+}
+
+function opigno_audio_app_field_instance_settings_form($field,$instance) {
+  // Use the file field instance settings form as a basis.
+  return file_field_instance_settings_form($field, $instance);
+}
+
+/**
+ * Implements hook_field_widget_error().
+ *
+ * Work-around for Drupal bug http://drupal.org/node/1432732
+ */
+function opigno_audio_app_field_widget_error($element, $error, $form, &$form_state) {
+  form_error($element, $error['message']);
+}

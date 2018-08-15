@@ -1,0 +1,12 @@
+name = Opigno External Video App
+description = Opigno External Video App integrates the Video Filter module with Opigno
+core = 7.x
+package = Opigno Apps
+
+dependencies[] = video_filter
+; Information added by Drupal.org packaging script on 2017-01-30
+version = "7.x-1.2"
+core = "7.x"
+project = "opigno_external_video_app"
+datestamp = "1485769986"
+

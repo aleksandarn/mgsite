@@ -1,0 +1,20 @@
+name = Opigno Audio App
+description = Opigno Audio App
+core = 7.x
+package = Opigno Apps
+
+files[] = views/opigno_audio_app_field_course_audio_weight.inc
+files[] = views/opigno_audio_app_sort_course_audio_weight.inc
+
+dependencies[] = views
+dependencies[] = views_php
+dependencies[] = og
+dependencies[] = file
+
+
+; Information added by Drupal.org packaging script on 2017-01-30
+version = "7.x-1.5"
+core = "7.x"
+project = "opigno_audio_app"
+datestamp = "1485770886"
+

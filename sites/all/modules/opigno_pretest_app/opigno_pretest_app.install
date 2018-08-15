@@ -1,0 +1,97 @@
+<?php
+
+/**
+ * @file
+ * Define module install logic.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function opigno_pretest_app_install() {
+  db_update('system')->fields(array(
+    'weight' => 10,
+  ))->condition('name', 'opigno_pretest_app')->execute();
+
+  // Add the og pre-test quiz field.
+  $field = field_info_field('course_pretest_ref');
+  if (empty($field)) {
+    $field = array(
+      'active' => 1,
+      'cardinality' => 1,
+      'deleted' => 0,
+      'entity_types' => array(),
+      'field_name' => 'course_pretest_ref',
+      'foreign keys' => array(
+        'node' => array(
+          'columns' => array(
+            'target_id' => 'nid',
+          ),
+          'table' => 'node',
+        ),
+      ),
+      'indexes' => array(
+        'target_id' => array(
+          0 => 'target_id',
+        ),
+      ),
+      'locked' => 0,
+      'module' => 'entityreference',
+      'settings' => array(
+        'handler' => 'base',
+        'handler_settings' => array(
+          'behaviors' => array(
+            'views-select-list' => array(
+              'status' => 0,
+            ),
+          ),
+          'view' => array(
+            'args' => array(),
+            'display_name' => 'entityreference_1',
+            'view_name' => 'opigno_quizzes',
+          ),
+        ),
+        'target_type' => 'node',
+      ),
+      'translatable' => 0,
+      'type' => 'entityreference',
+    );
+
+    // If Quiz app exists, re-use it's Entity-reference view.
+    if (module_exists('views') && module_exists('opigno_quiz_app')) {
+      $field['settings']['handler_settings'] = array(
+        'behaviors' => array(
+          'views-select-list' => array(
+            'status' => 0,
+          ),
+        ),
+        'view' => array(
+          'args' => array(),
+          'display_name' => 'entityreference_1',
+          'view_name' => 'opigno_quizzes',
+        ),
+      );
+    }
+
+    field_create_field($field);
+  }
+
+  if (defined('OPIGNO_COURSE_BUNDLE')) {
+    $instance = field_info_instance('node', 'course_pretest_ref', OPIGNO_COURSE_BUNDLE);
+    if (empty($instance)) {
+      field_create_instance(array(
+        'field_name' => 'course_pretest_ref',
+        'entity_type' => 'node',
+        'bundle' => OPIGNO_COURSE_BUNDLE,
+        'label' => "Course pre-test",
+        'description' => "Defines a test pending users must pass before activating their membership.",
+        'required' => FALSE,
+      ));
+    }
+  }
+
+  // If we're in distribution context, refresh the strings and translations.
+  if (function_exists('opigno_lms_refresh_strings_and_import')) {
+    opigno_lms_refresh_strings_and_import(array('rules', 'field'));
+  }
+}
